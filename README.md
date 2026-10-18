@@ -1,87 +1,97 @@
-# Note — особисті нотатки в Telegram
+# Note — personal notes in Telegram
 
-Бот + API для зберігання акаунтів, посилань, покупок і чого завгодно — по папках,
-з довільними полями в кожному записі, пошуком і спільними папками для сім'ї.
+A bot + API for storing accounts, links, purchases and anything else — organized in folders,
+with custom fields in every entry, search, and folders you can share with family.
 
 ```
 Telegram ──► bot (aiogram) ──HTTP──► api (FastAPI) ──► PostgreSQL
-                                                  └──► backup (щоденний pg_dump у ./backups)
+                                                  └──► backup (daily pg_dump to ./backups)
 ```
 
-## Запуск (macOS + Docker Desktop)
+> The bot's interface is in Ukrainian; button labels below are quoted as they appear in the bot.
 
-1. Створи бота в [@BotFather](https://t.me/BotFather) → `/newbot` → скопіюй токен.
-2. Відкрий `.env` (уже створений, секрети згенеровані) і впиши `BOT_TOKEN`.
-   Якщо `.env` немає — `cp .env.example .env` і заповни.
-3. Запусти:
+## Running (macOS + Docker Desktop)
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) → `/newbot` → copy the token.
+2. Create `.env` from the template and fill in `BOT_TOKEN`
+   (generate `API_KEY` and `POSTGRES_PASSWORD` with `openssl rand -hex 32`):
+   ```bash
+   cp .env.example .env
+   ```
+3. Start everything:
    ```bash
    docker compose up -d --build
    ```
-4. Напиши боту `/start`. Він відповість «🔒 приватний бот» і покаже **твій Telegram ID**.
-   Впиши його в `ADMIN_TELEGRAM_ID` у `.env` і перезапусти бота з API:
+4. Send `/start` to the bot. It replies "🔒 private bot" and shows **your Telegram ID**.
+   Put it into `ADMIN_TELEGRAM_ID` in `.env` and restart the API and the bot:
    ```bash
    docker compose up -d --force-recreate api bot
    ```
-5. Знову `/start` — ти адмін. Кнопка «🎟 Запросити» дає одноразове посилання для дружини / сім'ї.
+5. `/start` again — you're the admin now. The «🎟 Запросити» (Invite) button gives you a
+   single-use invite link for family members.
 
-### Щоб працювало постійно
+### Keeping it running
 
 - Docker Desktop → Settings → General → **Start Docker Desktop when you sign in**.
-- Контейнери мають `restart: unless-stopped` — піднімуться самі після перезапуску Docker.
-- Щоб Mac не засинав: `sudo pmset -a sleep 0` (або `sudo pmset -a disablesleep 1`, якщо кришка закрита).
-- Home Assistant можна тримати поруч — порти не конфліктують (API: `127.0.0.1:8000`, HA: `8123`).
+- All containers use `restart: unless-stopped`, so they come back after Docker restarts.
+- Keep the Mac awake: `sudo pmset -a sleep 0` (or `sudo pmset -a disablesleep 1` to stay awake
+  with the lid closed).
+- Home Assistant can run alongside — no port conflicts (API: `127.0.0.1:8000`, HA: `8123`).
 
-## Як користуватись
+## Usage
 
-| Дія | Як |
+| Action | How |
 |---|---|
-| Переглянути | 📁 Папки → папка → запис |
-| Новий запис | ➕ Запис → папка → назва → поля |
-| Швидко | після вибору папки одним повідомленням: перший рядок — назва, далі поля |
-| Пошук | просто напиши назву або частину в чат |
-| Поля | `назва: значення`, кожне з нового рядка; голе посилання стане полем «посилання» |
-| Секрети | поля з ключами «пароль», «PIN», «token», «cvv»… — під спойлером |
-| Спільна папка | ⚙️ Папка → 👥 Доступ → вибрати людину |
+| Browse | «📁 Папки» (Folders) → folder → entry |
+| New entry | «➕ Запис» (Entry) → folder → title → fields |
+| Quick add | after picking a folder, send one message: first line is the title, the rest are fields |
+| Search | just type a title or part of it into the chat |
+| Fields | `key: value`, one per line; a bare URL becomes a «посилання» (link) field |
+| Secrets | fields with keys like «пароль» (password), «PIN», «token», «cvv»… are shown under a spoiler |
+| Edit an entry | open it → add / edit / delete fields, rename, move, delete |
+| Manage a folder | open it → «⚙️ Папка» → rename, sharing, delete |
+| Shared folder | «⚙️ Папка» → «👥 Доступ» (Access) → pick a person |
 
-Повідомлення з полями бот видаляє з чату після збереження, щоб паролі не висіли в історії.
+After saving, the bot deletes your message with the field values, so passwords don't linger in
+the chat history.
 
-## Розробка
+## Development
 
 ```bash
-python3.12 -m venv .venv            # або існуючий .venv
+python3.12 -m venv .venv            # or reuse an existing .venv
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest
 ```
 
-- API-документація (Swagger): http://127.0.0.1:8000/docs — запити потребують заголовків
-  `X-API-Key` і `X-Telegram-Id`.
-- Нова міграція після зміни `app/models.py`:
+- API docs (Swagger): http://127.0.0.1:8000/docs — requests need the `X-API-Key` and
+  `X-Telegram-Id` headers.
+- New migration after changing `app/models.py`:
   ```bash
-  docker compose exec api alembic revision --autogenerate -m "опис"
+  docker compose exec api alembic revision --autogenerate -m "description"
   ```
-- Логи: `docker compose logs -f bot api`
+- Logs: `docker compose logs -f bot api`
 
-### Структура
+### Project layout
 
 ```
-app/            FastAPI: моделі, схеми, роути (auth, folders, items)
-bot/            aiogram-бот: handlers/, клавіатури, рендер, HTTP-клієнт до API
+app/            FastAPI: models, schemas, routes (auth, folders, items)
+bot/            aiogram bot: handlers/, keyboards, rendering, HTTP client for the API
 migrations/     Alembic
-tests/          pytest (SQLite in-memory)
+tests/          pytest (in-memory SQLite)
 ```
 
-## Бекапи
+## Backups
 
-Сервіс `backup` щодоби кладе `backups/note-YYYY-MM-DD.sql.gz` і тримає 14 днів.
-Відновлення:
+The `backup` service writes `backups/note-YYYY-MM-DD.sql.gz` once a day and keeps the last 14 days.
+Restore into an empty database:
 ```bash
 gunzip -c backups/note-2026-10-17.sql.gz | docker compose exec -T db psql -U note note
 ```
 
-## Ідеї на потім
+## Ideas for later
 
-- Веб-версія поверх того ж API (вхід через Telegram Login)
-- Файли й фото (взуття, документи)
-- Шифрування секретних полів у БД
-- Автовидалення повідомлення з паролем через N секунд
-- Теги / вкладені папки
+- Web version on top of the same API (sign in with Telegram Login)
+- Files and photos (shoes, documents)
+- Encryption of secret fields in the database
+- Auto-delete the message with a password after N seconds
+- Tags / nested folders
